@@ -8,4 +8,4 @@ def inicio():
 
 @app.get("/generar")
 def generar():
-    return {"password": "test1234"}
+    return {"password": "test1234"}:
