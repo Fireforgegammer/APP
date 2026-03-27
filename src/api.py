@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Query
 from src.core.generador import generar_password
+from src.core.storage import cargar_passwords, guardar_passwords
 
 app = FastAPI()
 
@@ -24,4 +25,11 @@ def generar(
         incluir_simbolos=incluir_simbolos,
         usuario=usuario
     )
+    passwords = cargar_passwords()
+    passwords.append({
+        "sitio": None,
+        "password": password
+    })
+    guardar_passwords(passwords)
+
     return {"password": password}
