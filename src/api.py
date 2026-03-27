@@ -1,35 +1,96 @@
 from fastapi import FastAPI, Query
-from src.core.generador import generar_password
-from src.core.storage import cargar_passwords, guardar_passwords
+from ui import acciones, menu
 
-app = FastAPI()
+app = FastAPI(title="Gestor de Contraseñas Multiplataforma 🚀")
 
-@app.get("/")
-def inicio():
-    return {"mensaje": "API funcionando 🚀"}
+# -------------------------
+# Menú
+# -------------------------
+@app.get("/menu")
+def obtener_menu_api():
+    """
+    Devuelve el menú principal.
+    """
+    return {
+        "menu_principal": menu.obtener_menu(),
+        "submenu_generar": menu.obtener_submenu_generar()
+    }
 
-@app.get("/generar")
-def generar(
-    longitud: int = Query(16, ge=8, le=128, description="Longitud de la contraseña"),
-    incluir_mayus: bool = Query(True, description="Incluir mayúsculas"),
-    incluir_minus: bool = Query(True, description="Incluir minúsculas"),
-    incluir_numeros: bool = Query(True, description="Incluir números"),
-    incluir_simbolos: bool = Query(True, description="Incluir símbolos"),
-    usuario: str = Query("", description="Nombre del usuario para evitarlo en la contraseña")
+# -------------------------
+# Generación de contraseñas
+# -------------------------
+@app.post("/generar/aleatoria")
+def generar_aleatoria(
+    longitud: int = Query(..., ge=4, le=108),
+    incluir_mayus: bool = Query(True),
+    incluir_minus: bool = Query(True),
+    incluir_numeros: bool = Query(True),
+    incluir_simbolos: bool = Query(True),
+    cantidad: int = Query(1, ge=1)
 ):
-    password = generar_password(
-        longitud=longitud,
-        incluir_mayus=incluir_mayus,
-        incluir_minus=incluir_minus,
-        incluir_numeros=incluir_numeros,
-        incluir_simbolos=incluir_simbolos,
-        usuario=usuario
-    )
-    passwords = cargar_passwords()
-    passwords.append({
-        "sitio": None,
-        "password": password
-    })
-    guardar_passwords(passwords)
+    config = {
+        "minus": incluir_minus,
+        "mayus": incluir_mayus,
+        "numeros": incluir_numeros,
+        "simbolos": incluir_simbolos
+    }
+    nuevas = acciones.generar_passwords_backend(config, longitud, cantidad)
+    return {"contraseñas": nuevas}
 
-    return {"password": password}
+@app.post("/generar/manual")
+def generar_manual(password: str):
+    """
+    Guarda contraseña proporcionada por el usuario.
+    """
+    guardada = acciones.guardar_password_manual(password)
+    return {"contraseña_guardada": guardada}
+
+# -------------------------
+# Ver contraseñas
+# -------------------------
+@app.get("/ver")
+def ver_passwords(tipo: str = Query("todo"), cantidad: int = Query(5)):
+    """
+    Devuelve contraseñas filtradas:
+    - todo
+    - ultimas
+    - sin_sitio
+    - usadas
+    """
+    lista = acciones.obtener_passwords(tipo=tipo, cantidad=cantidad)
+    return {"contraseñas": lista}
+
+# -------------------------
+# Añadir sitio
+# -------------------------
+@app.post("/anadir_sitio")
+def anadir_sitio(sitio: str, index: int):
+    """
+    Asigna un sitio a una contraseña sin asignar.
+    """
+    exito = acciones.anadir_sitio(sitio, index)
+    return {"exito": exito}
+
+# -------------------------
+# Eliminar contraseña
+# -------------------------
+@app.delete("/eliminar")
+def eliminar(index: int):
+    """
+    Elimina contraseña por índice.
+    """
+    eliminada = acciones.eliminar_password(index)
+    if eliminada:
+        return {"eliminada": eliminada}
+    return {"error": "Índice inválido"}
+
+# -------------------------
+# Buscar contraseña
+# -------------------------
+@app.get("/buscar")
+def buscar(query: str):
+    """
+    Busca contraseñas por sitio.
+    """
+    encontrados = acciones.buscar_password(query)
+    return {"resultados": encontrados}

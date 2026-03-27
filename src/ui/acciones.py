@@ -1,162 +1,121 @@
-from core.storage import cargar_passwords, guardar_passwords
+from core.storage import cargar_passwords, agregar_password, eliminar_password_por_valor
 from core.evaluador import evaluar_password
+from core.generador import generar_passwords
 
-def mostrar_passwords(passwords):
-    for i, item in enumerate(passwords, start=1):
-        sitio = item["sitio"] or "Sin asignar"
-        print(f"{i}. {sitio} -> {item['password']}")
-def ver_passwords():
+# -------------------------
+# Funciones de lectura
+# -------------------------
+def obtener_passwords(tipo: str = "todo", cantidad: int = 5):
+    """
+    Devuelve contraseñas filtradas:
+    - 'ultimas': últimas N contraseñas
+    - 'sin_sitio': sin sitio asignado
+    - 'usadas': con sitio asignado
+    - 'todo': todas
+    """
     passwords = cargar_passwords()
 
-    if not passwords:
-        print("\n❌ No hay contraseñas")
-        return
+    if tipo == "ultimas":
+        lista = passwords[-cantidad:]
+    elif tipo == "sin_sitio":
+        lista = [p for p in passwords if p.get("sitio") is None]
+    elif tipo == "usadas":
+        lista = [p for p in passwords if p.get("sitio") is not None]
+    else:
+        lista = passwords
 
-    for i, item in enumerate(passwords, start=1):
-        sitio = item["sitio"] or "Sin asignar"
-        nivel = evaluar_password(item["password"])
-        print(f"{i}. {sitio} -> {item['password']} -> {nivel}")
-        
-def anadir_sitio():
+    return [
+        {
+            "sitio": p.get("sitio") or "Sin asignar",
+            "password": p["password"],
+            "nivel": evaluar_password(p["password"])
+        } for p in lista
+    ]
+
+# -------------------------
+# Funciones de modificación
+# -------------------------
+def anadir_sitio(sitio: str, index: int):
+    """
+    Asigna un sitio a una contraseña sin asignar por índice.
+    """
     passwords = cargar_passwords()
-
-    # 1. Filtrar las que no tienen sitio
     sin_sitio = [p for p in passwords if p.get("sitio") is None]
 
-    if not sin_sitio:
-        print("❌ No hay contraseñas sin asignar")
-        return
+    if not sin_sitio or index < 0 or index >= len(sin_sitio):
+        return False
 
-    # 2. Mostrar lista (como opción 2)
-    print("\n🔑 Contraseñas sin asignar:")
-    for i, p in enumerate(sin_sitio):
-        print(f"{i+1}. Sin asignar -> {p['password']}")
-
-    # 3. Elegir una
-    try:
-        eleccion = int(input("Elige una contraseña: ")) - 1
-        seleccionada = sin_sitio[eleccion]
-    except (ValueError, IndexError):
-        print("❌ Selección inválida")
-        return
-
-    # 4. Pedir sitio
-    sitio = input("🌐 Introduce el sitio: ")
-
-    # 5. Actualizar la original
+    seleccionada = sin_sitio[index]
     for p in passwords:
         if p == seleccionada:
             p["sitio"] = sitio
             break
 
-    # 6. Guardar cambios
-    guardar_passwords(passwords)
+    # Guardamos actualizando MongoDB individualmente
+    for p in passwords:
+        agregar_password(p)  # insertará solo nuevas, duplicadas son ignoradas
+    return True
 
-    print("✅ Sitio añadido correctamente")
-    
-def eliminar_password():
+def eliminar_password(index: int):
+    """
+    Elimina contraseña por índice de la lista completa.
+    """
     passwords = cargar_passwords()
+    if index < 0 or index >= len(passwords):
+        return None
 
-    if not passwords:
-        print("❌ No hay contraseñas para eliminar")
-        return
+    eliminada = passwords.pop(index)
+    eliminar_password_por_valor(eliminada["password"])
+    return eliminada
 
-    # 1. Mostrar lista
-    print("\n🗑️ Lista de contraseñas:")
-    mostrar_passwords(passwords)
-
-    # 2. Elegir
-    try:
-        eleccion = int(input("Elige el número a eliminar: ")) - 1
-
-        if eleccion < 0 or eleccion >= len(passwords):
-            print("❌ Selección fuera de rango")
-            return
-
-    except ValueError:
-        print("❌ Debes introducir un número")
-        return
-
-    # 3. Eliminar
-    eliminada = passwords.pop(eleccion)
-
-    # 4. Guardar
-    guardar_passwords(passwords)
-
-    # 5. Confirmación
-    sitio = eliminada["sitio"] or "Sin asignar"
-    print(f"✅ Eliminada: {sitio} -> {eliminada['password']}")
-    
-def buscar_password():
+def buscar_password(query: str):
+    """
+    Busca contraseñas que contengan el texto en el sitio.
+    """
     passwords = cargar_passwords()
-
-    if not passwords:
-        print("\n❌ No hay contraseñas")
-        return
-
-    busqueda = input("🔍 Introduce el sitio a buscar: ").strip().lower()
-
     encontrados = [
         p for p in passwords
-        if p["sitio"] and busqueda in p["sitio"].lower()
+        if p.get("sitio") and query.lower() in p["sitio"].lower()
+    ]
+    return [
+        {
+            "sitio": p.get("sitio") or "Sin asignar",
+            "password": p["password"],
+            "nivel": evaluar_password(p["password"])
+        } for p in encontrados
     ]
 
-    if not encontrados:
-        print("❌ No se encontraron resultados")
-        return
-
-    for i, item in enumerate(encontrados, start=1):
-        print(f"{i}. {item['sitio']} -> {item['password']}")
-        
-def pedir_opcion(mensaje):
-    while True:
-        opcion = input(mensaje).strip().lower()
-
-        if opcion in ("s", "n"):
-            return opcion == "s"
-        else:
-            print("❌ Solo puedes introducir 's' o 'n'")
-            
-def pedir_numero(mensaje, minimo=1):
-    while True:
-        valor = input(mensaje).strip()
-
-        if valor.isdigit():
-            numero = int(valor)
-            if numero >= minimo:
-                return numero
-
-        print(f"❌ Introduce un número mayor o igual a {minimo}")
-        
-def pedir_configuracion_password():
-    print("\n📋 ¿Qué caracteres quieres incluir?")
-    
-    incluir_minus = pedir_opcion("¿Minúsculas? (s/n): ")
-    incluir_mayus = pedir_opcion("¿Mayúsculas? (s/n): ")
-    incluir_numeros = pedir_opcion("¿Números? (s/n): ")
-    incluir_simbolos = pedir_opcion("¿Símbolos? (s/n): ")
-
-    return {
-        "minus": incluir_minus,
-        "mayus": incluir_mayus,
-        "numeros": incluir_numeros,
-        "simbolos": incluir_simbolos
-    }
-    
-from core.generador import generar_passwords
-
-def generar_y_guardar_passwords():
-    config = pedir_configuracion_password()
-    longitud = pedir_numero("Longitud de la contraseña: ", minimo=4)
-    cantidad = pedir_numero("¿Cuántas contraseñas quieres generar?: ", minimo=1)
-
+# -------------------------
+# Funciones de generación
+# -------------------------
+def generar_passwords_backend(config, longitud: int, cantidad: int):
+    """
+    Genera contraseñas y las guarda en MongoDB de forma incremental.
+    """
     nuevas_passwords = generar_passwords(config, longitud, cantidad)
+    for p in nuevas_passwords:
+        agregar_password(p)
+    return nuevas_passwords
 
-    for i, p in enumerate(nuevas_passwords, start=1):
-        print(f"{i}. {p['password']}")
+def guardar_password_manual(password: str):
+    """
+    Guarda contraseña proporcionada manualmente por el usuario.
+    """
+    obj = {"sitio": None, "password": password}
+    agregar_password(obj)
+    return obj
 
-    passwords_existentes = cargar_passwords()
-    passwords_existentes.extend(nuevas_passwords)
-    guardar_passwords(passwords_existentes)
-
-    print("✅ Contraseñas guardadas correctamente")
+# -------------------------
+# Funciones de ayuda
+# -------------------------
+def evaluar_lista_passwords(passwords):
+    """
+    Devuelve la lista con nivel de seguridad agregado.
+    """
+    return [
+        {
+            "sitio": p.get("sitio") or "Sin asignar",
+            "password": p["password"],
+            "nivel": evaluar_password(p["password"])
+        } for p in passwords
+    ]
